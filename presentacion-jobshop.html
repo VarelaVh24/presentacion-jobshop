@@ -1,0 +1,1369 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Algoritmos Genéticos · Job Shop</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0b0916;
+  --bg-2: #120f22;
+  --card: rgba(255, 255, 255, .035);
+  --card-2: rgba(255, 255, 255, .06);
+  --line: rgba(255, 255, 255, .13);
+  --line-2: rgba(255, 255, 255, .22);
+  --text: #f4f2ff;
+  --muted: #a7a2c3;
+  --dim: #6f6a8c;
+  --purple: #8b6cff;
+  --purple-2: #5b3fd9;
+  --mint: #7ef2c4;
+  --red: #ff6b6b;
+  --blue: #6cb8ff;
+  --grad: linear-gradient(160deg, #a58bff 0%, #6f5bd9 45%, #7ef2c4 100%);
+  --sans: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  --serif: "Instrument Serif", Georgia, serif;
+  --mono: "JetBrains Mono", Consolas, monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: #050409; color: var(--text); font-family: var(--sans); overflow: hidden; }
+button { font: inherit; color: inherit; cursor: pointer; }
+body { user-select: none; -webkit-user-select: none; }
+input { user-select: text; }
+[data-live] .card.stat { padding: 16px 22px; }
+[data-live] .stat .val { font-size: 34px; }
+.genes.sm { gap: 6px; flex-wrap: nowrap; }
+.genes.sm .gene { width: 52px; height: 52px; font-size: 20px; border-radius: 12px; }
+
+/* Escenario 16:9 que se escala a la pantalla */
+#stage { position: fixed; left: 50%; top: 50%; width: 1600px; height: 900px; transform-origin: center; background: var(--bg); overflow: hidden; }
+.slide { position: absolute; inset: 0; padding: 92px 96px 80px; opacity: 0; visibility: hidden; transition: opacity .55s ease, visibility .55s; }
+.slide.active { opacity: 1; visibility: visible; }
+.slide::before { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(700px 420px at var(--gx, 85%) var(--gy, 0%), rgba(139, 108, 255, .16), transparent 70%),
+              radial-gradient(600px 400px at var(--hx, 0%) var(--hy, 100%), rgba(126, 242, 196, .07), transparent 70%); }
+.slide > * { position: relative; }
+
+/* Encabezado y pie fijos, como la referencia */
+.chrome { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
+.brand { position: absolute; left: 96px; top: 40px; font-weight: 600; font-size: 17px; letter-spacing: .02em; display: flex; align-items: center; gap: 10px; }
+.brand i { width: 18px; height: 18px; border-radius: 50%; background: var(--grad); display: inline-block; }
+.tag { position: absolute; right: 96px; top: 30px; height: 44px; font-size: 14px; color: var(--muted); letter-spacing: .04em; display: flex; align-items: center; gap: 16px; }
+/* Inicial de quien presenta la diapositiva */
+.who { width: 44px; height: 44px; border-radius: 50%; display: none; align-items: center; justify-content: center; font-size: 20px; font-weight: 700; color: #120f22; letter-spacing: 0; box-shadow: 0 0 0 4px rgba(255, 255, 255, .06), 0 8px 28px rgba(0, 0, 0, .35); }
+.who.on { display: flex; }
+.foot { position: absolute; left: 96px; bottom: 34px; font-size: 13px; color: var(--dim); letter-spacing: .05em; }
+.num { position: absolute; right: 96px; bottom: 30px; font-size: 15px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.progress { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--grad); transition: width .5s ease; }
+
+/* Tipografía */
+.kicker { font-size: 15px; color: var(--mint); letter-spacing: .18em; text-transform: uppercase; margin-bottom: 18px; font-weight: 500; }
+h1, h2 { font-weight: 700; letter-spacing: -.035em; line-height: .98; }
+h1 { font-size: 150px; }
+h2 { font-size: 72px; margin-bottom: 28px; }
+h3 { font-size: 26px; font-weight: 600; letter-spacing: -.01em; margin-bottom: 10px; }
+em, .it { font-family: var(--serif); font-style: italic; font-weight: 400; letter-spacing: -.01em; }
+p, li { font-size: 21px; line-height: 1.5; color: var(--muted); }
+p strong, li strong { color: var(--text); font-weight: 600; }
+.lead { font-size: 25px; line-height: 1.45; max-width: 1000px; }
+.mono { font-family: var(--mono); }
+.grad-text { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+/* Piezas */
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 26px; padding: 30px 32px; }
+.card.glow { background: linear-gradient(180deg, rgba(139, 108, 255, .14), rgba(139, 108, 255, .02)); border-color: rgba(165, 139, 255, .35); }
+.card.fill { background: var(--grad); border: none; color: #120f22; }
+.card.fill p, .card.fill h3 { color: #120f22; }
+.pill { display: inline-flex; align-items: center; gap: 8px; padding: 9px 20px; border: 1px solid var(--line-2); border-radius: 999px; font-size: 16px; color: var(--text); background: transparent; transition: background .2s, border-color .2s; }
+.pill:hover { background: var(--card-2); border-color: var(--purple); }
+.pill.on { background: var(--text); color: var(--bg); border-color: var(--text); }
+.pill.primary { background: var(--grad); color: #120f22; border: none; font-weight: 600; }
+.pills { display: flex; flex-wrap: wrap; gap: 12px; }
+.big { font-size: 84px; font-weight: 600; letter-spacing: -.04em; line-height: 1; font-variant-numeric: tabular-nums; }
+.big small { font-size: 32px; color: var(--muted); font-weight: 500; letter-spacing: 0; }
+.label { font-size: 15px; color: var(--muted); letter-spacing: .03em; }
+.row { display: flex; gap: 28px; }
+.col { display: flex; flex-direction: column; gap: 22px; }
+.grow { flex: 1; min-width: 0; }
+.center { display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; }
+.note { font-size: 15px; color: var(--dim); }
+.chip { display: inline-flex; align-items: center; justify-content: center; border-radius: 10px; font-weight: 700; color: #120f22; }
+
+/* Aparición escalonada */
+.rv { opacity: 0; transform: translateY(18px); }
+.slide.active .rv { animation: rv .7s cubic-bezier(.2, .7, .2, 1) forwards; }
+.slide.active .rv:nth-child(2) { animation-delay: .08s; } .slide.active .rv:nth-child(3) { animation-delay: .16s; }
+.slide.active .rv:nth-child(4) { animation-delay: .24s; } .slide.active .rv:nth-child(5) { animation-delay: .32s; }
+.slide.active .rv:nth-child(6) { animation-delay: .4s; }
+@keyframes rv { to { opacity: 1; transform: none; } }
+
+/* Gráficas SVG */
+svg text { font-family: var(--sans); }
+.axis text { fill: var(--dim); font-size: 13px; }
+.axis line, .axis path { stroke: rgba(255, 255, 255, .1); }
+.bar { transition: transform .6s cubic-bezier(.3, .7, .2, 1); }
+.tip { position: absolute; pointer-events: none; background: #1d1933; border: 1px solid var(--line-2); border-radius: 12px; padding: 8px 12px; font-size: 14px; color: var(--text); white-space: nowrap; opacity: 0; transition: opacity .15s; z-index: 20; }
+
+/* Portada */
+#s-portada { display: flex; flex-direction: column; justify-content: center; --gx: 50%; --gy: 45%; }
+#s-portada h1 { font-size: 168px; }
+.orb { position: absolute; width: 520px; height: 520px; border-radius: 50%; right: 120px; top: 170px; background: radial-gradient(circle at 35% 30%, rgba(165, 139, 255, .55), rgba(91, 63, 217, .18) 45%, transparent 70%); filter: blur(6px); }
+.floaters { position: absolute; right: 150px; top: 230px; width: 460px; height: 420px; }
+.floaters span { position: absolute; width: 58px; height: 58px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 24px; color: #120f22; animation: flo 6s ease-in-out infinite; box-shadow: 0 10px 40px rgba(0, 0, 0, .35); }
+@keyframes flo { 50% { transform: translateY(-16px) rotate(4deg); } }
+.team { display: flex; gap: 14px; margin-top: 56px; flex-wrap: wrap; }
+
+/* Cromosomas */
+.genes { display: flex; gap: 8px; flex-wrap: wrap; }
+.gene { width: 62px; height: 62px; border-radius: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 700; font-size: 24px; color: #120f22; position: relative; transition: transform .35s, box-shadow .25s, opacity .3s, outline-color .2s; user-select: none; outline: 3px solid transparent; outline-offset: 3px; }
+.gene sub { font-size: 15px; font-weight: 700; opacity: .7; line-height: 1; margin-top: 1px; }
+.gene.click { cursor: pointer; }
+.gene.click:hover { transform: translateY(-4px); }
+.gene.sel { outline-color: var(--text); transform: translateY(-6px); }
+.gene.hot { outline-color: var(--red); }
+.gene.mark { outline-color: var(--blue); opacity: .45; }
+.gene.ghost { opacity: .12; }
+.gene.cur { outline-color: var(--mint); transform: translateY(-6px); }
+.gene.placeholder { background: transparent !important; border: 2px dashed var(--line-2); }
+.genes-label { width: 130px; flex: none; font-size: 17px; color: var(--muted); align-self: center; }
+
+/* Tabla de parámetros */
+.params { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+.params .card { padding: 30px 28px 26px; min-height: 238px; display: flex; flex-direction: column; justify-content: space-between; }
+.params .v { font-size: 54px; font-weight: 600; letter-spacing: -.03em; }
+.params .k { font-size: 17px; color: var(--muted); line-height: 1.35; }
+.params .s { font-size: 13px; color: var(--dim); margin-top: 6px; }
+
+/* Línea de tiempo del ciclo */
+.timeline { position: relative; display: grid; grid-template-columns: repeat(4, 1fr); gap: 26px; margin-top: 54px; }
+.timeline::before { content: ""; position: absolute; left: 0; right: 0; top: 33px; height: 1px; background: var(--line-2); }
+.step .dot { width: 66px; height: 66px; border-radius: 50%; background: var(--bg); border: 1px solid var(--line-2); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 22px; margin-bottom: 26px; position: relative; }
+.step.on .dot { background: var(--grad); color: #120f22; border: none; box-shadow: 0 0 40px rgba(139, 108, 255, .5); }
+
+/* Venn */
+.venn { position: relative; width: 760px; height: 400px; }
+.venn .c { position: absolute; top: 0; width: 400px; height: 400px; border-radius: 50%; border: 1px solid var(--line-2); display: flex; align-items: center; padding: 0 64px; font-size: 22px; }
+.venn .c1 { left: 0; background: radial-gradient(circle at 30% 50%, rgba(255, 107, 107, .12), transparent 70%); }
+.venn .c2 { right: 0; justify-content: flex-end; text-align: right; background: radial-gradient(circle at 70% 50%, rgba(126, 242, 196, .1), transparent 70%); }
+.venn .mid { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 150px; height: 150px; border-radius: 50%; background: radial-gradient(circle, rgba(139, 108, 255, .55), rgba(91, 63, 217, .15)); display: flex; align-items: center; justify-content: center; text-align: center; font-size: 17px; font-weight: 600; box-shadow: 0 0 60px rgba(139, 108, 255, .4); }
+
+/* Columnas 01 02 03 */
+.triple { display: grid; grid-template-columns: 1.15fr 1fr 1fr; height: 590px; border-radius: 28px; overflow: hidden; border: 1px solid var(--line); }
+.triple > div { padding: 36px 34px; position: relative; display: flex; flex-direction: column; justify-content: space-between; }
+.triple > div:nth-child(2) { background: var(--grad); color: #120f22; }
+.triple > div:nth-child(2) p, .triple > div:nth-child(2) .label { color: #2a2150; }
+.triple > div:nth-child(3) { background: var(--bg-2); }
+.triple .n { font-size: 150px; font-weight: 500; letter-spacing: -.06em; line-height: .8; opacity: .9; }
+
+/* Pacientes */
+.patients { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.patient { border: 1px solid var(--line); border-radius: 999px; padding: 10px 18px 10px 10px; display: flex; align-items: center; gap: 12px; background: var(--card); }
+.patient .av { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; color: #120f22; flex: none; }
+.patient b { display: block; font-size: 15px; font-weight: 600; }
+.patient small { font-size: 12.5px; color: var(--muted); letter-spacing: .02em; }
+
+/* Controles de demos */
+.controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.seed { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line-2); border-radius: 999px; padding: 6px 8px 6px 18px; font-size: 16px; color: var(--muted); }
+.seed input { width: 64px; background: var(--card-2); border: none; border-radius: 999px; color: var(--text); font: 600 16px var(--sans); padding: 6px 10px; text-align: center; }
+.stat .label { margin-bottom: 6px; }
+.stat .val { font-size: 44px; font-weight: 600; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+.badge { display: inline-block; padding: 6px 14px; border-radius: 999px; font-size: 14px; font-weight: 600; background: rgba(126, 242, 196, .14); color: var(--mint); border: 1px solid rgba(126, 242, 196, .35); }
+.badge.red { background: rgba(255, 107, 107, .12); color: var(--red); border-color: rgba(255, 107, 107, .35); }
+
+.refs em { font-family: var(--sans); font-style: italic; }
+.refs li { break-inside: avoid; font-size: 16px; line-height: 1.45; margin-bottom: 11px; padding-left: 42px; text-indent: -42px; list-style: none; }
+.refs a { color: var(--purple); text-decoration: none; word-break: break-all; }
+
+/* Navegación */
+.nav { position: fixed; left: 50%; transform: translateX(-50%); bottom: 14px; display: flex; gap: 8px; z-index: 30; opacity: .25; transition: opacity .2s; }
+.nav:hover { opacity: 1; }
+.nav button { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line-2); background: rgba(18, 15, 34, .8); font-size: 18px; }
+.help { position: fixed; left: 18px; bottom: 18px; font-size: 12px; color: var(--dim); z-index: 30; opacity: 0; transition: opacity .3s; font-family: var(--sans); }
+body:hover .help { opacity: .7; }
+
+@media print {
+  @page { size: 1600px 900px; margin: 0; }
+  html, body { overflow: visible; height: auto; background: var(--bg); }
+  #stage { position: static; transform: none !important; height: auto; }
+  .slide { position: relative; opacity: 1; visibility: visible; height: 900px; page-break-after: always; }
+  .rv { opacity: 1; transform: none; animation: none !important; }
+  .nav, .help, .controls { display: none; }
+}
+</style>
+</head>
+<body>
+<div id="stage">
+
+<!-- 1 · Portada -->
+<section class="slide" data-who="U" id="s-portada" data-tag="Inteligencia Artificial · UAQ">
+  <div class="orb"></div>
+  <div class="floaters" id="floaters"></div>
+  <div class="kicker rv">Programación de talleres · Job Shop</div>
+  <h1 class="rv">Algoritmos<br><em>gen</em>éticos</h1>
+  <p class="lead rv" style="margin-top:28px">Reproducción del GP-GA de Bierwirth (1995) en la instancia ft10.</p>
+  <div class="team rv">
+    <span class="pill">O. Daniel Varela Hernández · 327946</span>
+    <span class="pill">J. David Ortiz Cázares · 327960</span>
+    <span class="pill">J. Uriel Ortiz Pacheco · 294632</span>
+  </div>
+  <p class="note rv" style="margin-top:26px">Docente: Dr. Fidel González Gutiérrez · Ingeniería en Software · 6.º semestre</p>
+</section>
+
+<!-- 2 · Introducción -->
+<section class="slide" data-who="U" data-tag="Introducción" style="--gx:15%;--gy:10%">
+  <div class="kicker">Introducción</div>
+  <h2>IA y <em>evolución</em></h2>
+  <div class="row" style="margin-top:40px">
+    <div class="card grow rv" style="min-height:440px">
+      <div class="label" style="margin-bottom:60px">01 · ¿Qué es la IA?</div>
+      <h3 style="font-size:34px;line-height:1.2">La ciencia y la ingeniería de construir máquinas <em>inteligentes</em>.</h3>
+      <p style="margin-top:22px">Según McCarthy, la inteligencia es la parte computacional de la capacidad de lograr metas. Una de sus ramas es la <strong>búsqueda</strong>: examinar enormes cantidades de posibilidades de forma eficiente.</p>
+    </div>
+    <div class="card glow grow rv" style="min-height:440px">
+      <div class="label" style="margin-bottom:60px">02 · ¿Qué es un algoritmo genético?</div>
+      <h3 style="font-size:34px;line-height:1.2">Una búsqueda probabilística que <em>simula</em> la evolución natural.</h3>
+      <p style="margin-top:22px">Trabaja con una <strong>población</strong> de soluciones. En cada <strong>generación</strong> elige padres, los <strong>cruza</strong>, <strong>muta</strong> algunos hijos y se queda con los mejores (Larrañaga et al., 1999).</p>
+    </div>
+    <div class="col rv" style="width:330px">
+      <div class="card fill" style="flex:1">
+        <div class="label" style="color:#2a2150">Cruce</div>
+        <h3 style="font-size:28px;margin-top:14px">Sube la calidad promedio de la población</h3>
+      </div>
+      <div class="card" style="flex:1">
+        <div class="label">Mutación</div>
+        <h3 style="font-size:28px;margin-top:14px">Explora estados nuevos y evita <em>atorarse</em></h3>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 3 · Problema y objetivo -->
+<section class="slide" data-who="U" data-tag="Problema y objetivo" style="--gx:70%;--gy:30%">
+  <div class="kicker">Introducción · El proyecto</div>
+  <h2>Usar la evolución para<br>programar un <em>taller</em></h2>
+  <div class="row" style="margin-top:34px">
+    <div class="card grow rv">
+      <div class="label">Problema</div>
+      <p style="margin-top:14px;font-size:23px">Programación de talleres (<strong>job shop</strong>): un problema de planeación de la producción <strong>"notoriamente difícil"</strong> (Applegate y Cook, 1991).</p>
+    </div>
+    <div class="card glow grow rv">
+      <div class="label">Objetivo</div>
+      <p style="margin-top:14px;font-size:23px">Reproducir el <strong>GP-GA de Bierwirth (1995)</strong> en <strong>ft10</strong> (10 trabajos × 10 máquinas) y comparar con el óptimo (<strong>930</strong>) y con lo publicado (<strong>936</strong>).</p>
+    </div>
+  </div>
+  <div class="label rv" style="margin:44px 0 16px">Qué se verá · haz clic para saltar</div>
+  <div class="pills rv" id="agenda"></div>
+</section>
+
+<!-- 4 · Fuentes -->
+<section class="slide" data-who="O" data-tag="Fuentes del problema" style="--gx:30%;--gy:20%">
+  <div class="kicker">Fuentes</div>
+  <h2>Dos fuentes que se <em>complementan</em></h2>
+  <div class="row" style="margin-top:40px;align-items:stretch">
+    <div class="card grow rv">
+      <div class="label">Datos de la instancia</div>
+      <h3 style="font-size:32px;margin:18px 0 12px">OR-Library · ft10</h3>
+      <p>Repositorio de Beasley (Brunel University London). La instancia <strong>ft10</strong> (Fisher y Thompson) es uno de los benchmarks más famosos del job shop: su óptimo, <strong>930</strong>, tardó más de 20 años en demostrarse.</p>
+      <div class="pills" style="margin-top:26px"><span class="pill">10 trabajos</span><span class="pill">10 máquinas</span><span class="pill">100 tareas</span></div>
+    </div>
+    <div class="card glow grow rv">
+      <div class="label">Algoritmo, parámetros y resultados</div>
+      <h3 style="font-size:32px;margin:18px 0 12px">Bierwirth (1995) · <em>OR Spektrum</em></h3>
+      <p>"A generalized permutation approach to job shop scheduling with genetic algorithms". De aquí salen la representación, el cruce GOX, la selección en anillo y todos los valores numéricos.</p>
+      <div class="pills" style="margin-top:26px"><span class="pill">GP-GA</span><span class="pill">GOX</span><span class="pill">Mejor publicado: 936</span></div>
+    </div>
+  </div>
+  <p class="lead rv" style="margin-top:36px">La meta no es solo resolver el problema: es <strong>reproducir el experimento publicado</strong> y comparar resultados.</p>
+</section>
+
+<!-- 5 · Planteamiento -->
+<section class="slide" data-who="D" data-tag="Planteamiento" style="--gx:80%;--gy:60%">
+  <div class="kicker">1 · Planteamiento del problema</div>
+  <h2>El <em>orden</em></h2>
+  <div class="row" style="margin-top:24px">
+    <div class="col grow">
+      <p class="lead rv">Un taller tiene <strong>10 máquinas</strong> y <strong>10 trabajos</strong>. Cada trabajo pasa por las máquinas en su propio orden, cada máquina hace <strong>una tarea a la vez</strong> y una tarea no se interrumpe.</p>
+      <p class="lead rv" style="color:var(--text)">¿En qué orden se atiende todo para <em>terminar lo antes posible</em>?</p>
+      <div class="row rv" style="margin-top:20px">
+        <div class="card grow"><div class="label">Órdenes por máquina</div><div class="big" style="margin-top:14px">(10!)<sup style="font-size:40px">10</sup></div><p style="margin-top:10px">≈ <strong>3.96 × 10<sup>65</sup></strong> combinaciones</p></div>
+        <div class="card grow"><div class="label">Cromosomas distintos</div><div class="big" style="margin-top:14px;font-size:64px">100!/(10!)<sup style="font-size:32px">10</sup></div><p style="margin-top:10px">≈ <strong>2.36 × 10<sup>92</sup></strong></p></div>
+      </div>
+      <p class="note rv">Hay más cromosomas que átomos en el universo observable (~10<sup>80</sup>): imposible probarlos todos.</p>
+    </div>
+    <div class="col rv" style="width:360px">
+      <div class="card glow center" style="flex:1"><div class="label">Lo mejor posible</div><div class="big grad-text" style="font-size:110px;margin:10px 0">930</div><p>óptimo demostrado</p></div>
+      <div class="card center" style="flex:1"><div class="label">Lo que logró el autor</div><div class="big" style="font-size:110px;margin:10px 0">936</div><p>Bierwirth (1995)</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 6 · Representación + decodificador -->
+<section class="slide" data-who="D" data-tag="Representación" style="--gx:10%;--gy:30%">
+  <div class="kicker">Representación · pruébalo</div>
+  <h2>Una lista de <em>turnos</em></h2>
+  <div class="row" style="gap:48px">
+    <div class="col" style="width:520px">
+      <p class="rv">Cada número dice <strong>de qué trabajo es el turno</strong>. La 1.ª vez que aparece la B es su tarea 1; la 2.ª, su tarea 2, y así.</p>
+      <p class="rv">Cualquier lista da un horario <strong>válido</strong>: las tareas de cada trabajo siempre salen en su orden, así que no hay que reparar ni castigar soluciones.</p>
+      <div class="card rv" style="padding:22px 26px">
+        <div class="label" style="margin-bottom:10px">Ejemplo 3 × 3 · rutas</div>
+        <p style="font-size:17px" class="mono"><span style="color:var(--j0)">A</span> M1→M2→M3 (3, 2, 2)<br><span style="color:var(--j1)">B</span> M2→M3→M1 (2, 3, 2)<br><span style="color:var(--j2)">C</span> M3→M1→M2 (3, 2, 3)</p>
+      </div>
+    </div>
+    <div class="col grow rv">
+      <div class="label">Cromosoma · haz clic en dos fichas para intercambiarlas</div>
+      <div class="genes" id="dec-genes"></div>
+      <div class="controls">
+        <button class="pill" data-dec="fila">A, luego B, luego C</button>
+        <button class="pill" data-dec="azar">Al azar</button>
+        <button class="pill" data-dec="mejor">Mejor orden</button>
+        <button class="pill primary" data-dec="paso">▶ Construir paso a paso</button>
+      </div>
+      <div style="position:relative"><svg id="dec-gantt" viewBox="0 0 880 250" width="880" height="250"></svg></div>
+      <div class="row" style="align-items:center;gap:18px"><span class="label">Todo termina en</span><span class="big" id="dec-ms" style="font-size:64px">–</span><span id="dec-badge"></span></div>
+    </div>
+  </div>
+</section>
+
+<!-- 7 · Función objetivo -->
+<section class="slide" data-who="D" data-tag="Función objetivo" style="--gx:60%;--gy:10%">
+  <div class="kicker">2 · Función objetivo y fitness</div>
+  <h2>Minimizar el <em>makespan</em></h2>
+  <div class="row" style="margin-top:30px">
+    <div class="col grow">
+      <div class="card glow rv center" style="padding:46px 30px">
+        <div class="big" style="font-size:96px">C<sub style="font-size:40px">máx</sub> = máx<sub style="font-size:34px">i</sub> C<sub style="font-size:40px">i</sub></div>
+        <p style="margin-top:16px">el instante en que termina el último trabajo</p>
+      </div>
+      <div class="row rv">
+        <div class="card grow"><h3>Fitness</h3><p>Es el propio makespan, un número entero. <strong>Menor es mejor.</strong> Se usa para el ranking y para decidir entre cruzar o mutar.</p></div>
+        <div class="card grow"><h3>Makespan</h3><p>Tiempo total desde que arranca el taller hasta que termina el <strong>último</strong> trabajo.</p></div>
+      </div>
+    </div>
+    <div class="card rv" style="width:600px">
+      <h3>Horarios activos con <em>forcing</em></h3>
+      <p style="font-size:18px">Cada tarea se coloca en el <strong>primer hueco libre</strong> de su máquina donde quepa, siempre que ya haya terminado la tarea previa de su trabajo. Después el cromosoma se <strong>reescribe</strong> en el orden real de inicio.</p>
+      <svg viewBox="0 0 540 230" width="540" height="230" style="margin-top:18px">
+        <text x="0" y="22" fill="#6f6a8c" font-size="14">Máquina 4</text>
+        <rect x="0" y="34" width="540" height="56" rx="12" fill="rgba(255,255,255,.03)" stroke="rgba(255,255,255,.1)"/>
+        <rect x="10" y="42" width="120" height="40" rx="9" fill="#ff8a5c"/>
+        <rect x="290" y="42" width="140" height="40" rx="9" fill="#5cc8ff"/>
+        <rect x="140" y="42" width="140" height="40" rx="9" fill="none" stroke="#7ef2c4" stroke-dasharray="6 5"/>
+        <text x="210" y="67" fill="#7ef2c4" font-size="14" text-anchor="middle">hueco libre</text>
+        <g class="forcing-task"><rect width="120" height="40" rx="9" fill="#a58bff"/><text x="60" y="25" fill="#120f22" font-size="15" font-weight="700" text-anchor="middle">nueva</text></g>
+        <text x="0" y="150" fill="#a7a2c3" font-size="15">1. La tarea nueva llega al final de la fila…</text>
+        <text x="0" y="178" fill="#a7a2c3" font-size="15">2. …pero cabe en el hueco: se desplaza a la izquierda.</text>
+        <text x="0" y="206" fill="#a7a2c3" font-size="15">3. El cromosoma se reescribe con ese orden real.</text>
+      </svg>
+      <style>
+        .forcing-task { animation: forcing 4s ease-in-out infinite; }
+        @keyframes forcing { 0%, 15% { transform: translate(410px, 104px); } 45%, 55% { transform: translate(440px, 42px); opacity: .5; } 80%, 100% { transform: translate(150px, 42px); } }
+      </style>
+    </div>
+  </div>
+</section>
+
+<!-- 8 · Parámetros -->
+<section class="slide" data-who="U" data-tag="Parámetros" style="--gx:90%;--gy:90%">
+  <div class="kicker">3 · Parámetros generales</div>
+  <h2>Configuración y <em>criterios</em></h2>
+  <div class="params" style="margin-top:40px">
+    <div class="card glow rv"><div class="v grad-text">930</div><div><div class="k">Valor de referencia (óptimo de ft10)</div><div class="s">Peng et al., 2014</div></div></div>
+    <div class="card rv"><div class="v">100</div><div><div class="k">Generaciones (criterio de paro)</div><div class="s">Bierwirth, 1995</div></div></div>
+    <div class="card rv"><div class="v">100</div><div><div class="k">Individuos en un <em>anillo</em></div><div class="s">Bierwirth, 1995</div></div></div>
+    <div class="card rv"><div class="v" style="font-size:38px">40·30·20·10 %</div><div><div class="k">Ranking entre 4 vecinos</div><div class="s">Bierwirth, 1995</div></div></div>
+    <div class="card rv"><div class="v" style="font-size:38px">≠ makespan</div><div><div class="k">Criterio de cruce</div><div class="s">Bierwirth, 1995</div></div></div>
+    <div class="card rv"><div class="v" style="font-size:38px">= makespan</div><div><div class="k">Criterio de mutación</div><div class="s">Bierwirth, 1995</div></div></div>
+    <div class="card rv"><div class="v">⅓ – ½</div><div><div class="k">Largo de la cadena de cruce</div><div class="s">Bierwirth, 1995</div></div></div>
+    <div class="card rv"><div class="v">≤ 1 %</div><div><div class="k">Peor que acepta un hijo</div><div class="s">Bierwirth, 1995 · interpretación propia</div></div></div>
+  </div>
+  <p class="note" style="margin-top:22px">Evaluaciones por corrida: 10 000 + 100 de la población inicial · 100 corridas independientes (semillas 1 a 100). Sin probabilidades fijas de cruce o mutación: las deciden <strong style="color:var(--text)">reglas</strong>.</p>
+</section>
+
+<!-- 9 · Población y selección -->
+<section class="slide" data-who="O" data-tag="Población y selección" style="--gx:70%;--gy:50%">
+  <div class="kicker">4–5 · Población inicial y selección · pruébalo</div>
+  <h2>Ranking entre <em>4 vecinos</em></h2>
+  <div class="row" style="gap:40px">
+    <div class="col" style="width:560px">
+      <div class="card rv" style="padding:24px 28px"><h3>Población inicial</h3><p style="font-size:17px">100 cromosomas al azar: cada trabajo repetido 10 veces y revuelto como una <strong>baraja</strong>. Cada uno pasa por el decodificador y se guarda ya con el forcing aplicado.</p></div>
+      <div class="card rv" style="padding:24px 28px"><h3>Selección en anillo</h3><p style="font-size:17px">Cada individuo elige pareja entre sus <strong>2 vecinos de cada lado</strong>, ordenados del mejor al peor makespan. Así las buenas soluciones se propagan <strong>poco a poco</strong>.</p></div>
+      <div class="card glow rv" id="ring-info" style="padding:22px 28px;min-height:128px"><p style="font-size:17px">Haz clic en un individuo del anillo.</p></div>
+    </div>
+    <div class="grow rv" style="display:flex;justify-content:center">
+      <div style="position:relative;width:640px;height:640px;margin-top:-60px">
+        <svg id="ring" viewBox="0 0 640 640" width="640" height="640"></svg>
+        <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;pointer-events:none">
+          <div class="label">makespans iniciales</div>
+          <div style="font-size:30px;font-weight:600;margin:6px 0" id="ring-range">–</div>
+          <div class="note" id="ring-avg"></div>
+          <button class="pill primary" id="ring-pick" style="margin-top:22px;pointer-events:auto">Elegir pareja</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 10 · GOX -->
+<section class="slide" data-who="O" data-tag="Cruzamiento" style="--gx:20%;--gy:80%">
+  <div class="kicker">6 · Método de cruzamiento · paso a paso</div>
+  <h2>GOX · cruce de orden <em>generalizado</em></h2>
+  <p class="lead rv" style="max-width:1300px">El hijo es el <strong>receptor</strong> con un pedazo del <strong>donador</strong> pegado en medio. Se le quitan las fichas repetidas para que cada trabajo conserve su número de turnos.</p>
+  <div class="row" style="margin-top:34px;gap:40px">
+    <div class="col grow">
+      <div class="row" style="gap:8px"><div class="genes-label">Receptor</div><div class="genes sm" id="gox-r"></div></div>
+      <div class="row" style="gap:8px"><div class="genes-label">Donador</div><div class="genes sm" id="gox-d"></div></div>
+      <div class="row" style="gap:8px"><div class="genes-label">Hijo</div><div class="genes sm" id="gox-h"></div></div>
+      <div class="controls" style="margin-top:14px">
+        <button class="pill on" data-gox-case="0">Caso 1 · cadena interior</button>
+        <button class="pill" data-gox-case="1">Caso 2 · da la vuelta</button>
+        <span style="flex:1"></span>
+        <button class="pill" id="gox-prev">← Atrás</button>
+        <button class="pill primary" id="gox-next">Siguiente paso →</button>
+      </div>
+    </div>
+    <div class="card glow" style="width:470px">
+      <div class="label" id="gox-stepn">Paso 0 de 4</div>
+      <h3 style="font-size:28px;margin:14px 0" id="gox-title"></h3>
+      <p id="gox-text" style="font-size:19px"></p>
+    </div>
+  </div>
+</section>
+
+<!-- 11 · Mutación y criterio -->
+<section class="slide" data-who="D" data-tag="Mutación" style="--gx:50%;--gy:20%">
+  <div class="kicker">7 · Método de mutación y criterio · pruébalo</div>
+  <h2>¿<em>Cruzar</em> o <em>mutar</em>?</h2>
+  <div class="row" style="gap:56px;align-items:center;margin-top:10px">
+    <div class="venn rv">
+      <div class="c c1"><div><h3 style="color:var(--red)">Cruce GOX</h3><p style="font-size:18px">si los makespans son <strong>distintos</strong></p></div></div>
+      <div class="c c2"><div><h3 style="color:var(--mint)">Mutación</h3><p style="font-size:18px">si son <strong>iguales</strong>: probablemente son la misma solución</p></div></div>
+      <div class="mid">makespan del vecino</div>
+    </div>
+    <div class="col grow rv">
+      <h3>Cambio de posición de un gen</h3>
+      <p style="font-size:19px">Se toma un gen al azar y se reinserta en otra posición (Syswerda, citado en Bierwirth, 1995). Solo cambia el orden, así que el cromosoma <strong>sigue siendo válido</strong>.</p>
+      <div class="genes sm" id="mut-genes" style="margin-top:10px"></div>
+      <div class="controls"><button class="pill primary" id="mut-btn">Mutar</button><span class="note" id="mut-text"></span></div>
+    </div>
+  </div>
+</section>
+
+<!-- 12 · Ciclo -->
+<section class="slide" data-who="O" data-tag="Implementación" style="--gx:80%;--gy:20%">
+  <div class="kicker">Implementación · una generación</div>
+  <h2>El ciclo de cada <em>individuo</em></h2>
+  <div class="timeline" id="cycle">
+    <div class="step rv"><div class="dot">01</div><h3>Elegir pareja</h3><p style="font-size:18px">Entre sus 4 vecinos del anillo; el mejor tiene 40 % de probabilidad.</p></div>
+    <div class="step rv"><div class="dot">02</div><h3>Cruzar o mutar</h3><p style="font-size:18px">Makespans distintos → GOX. Iguales → se mueve una tarea.</p></div>
+    <div class="step rv"><div class="dot">03</div><h3>Construir el horario</h3><p style="font-size:18px">Cada tarea va al primer hueco libre de su máquina (forcing).</p></div>
+    <div class="step rv"><div class="dot">04</div><h3>¿Se queda el hijo?</h3><p style="font-size:18px">Sí, si termina a lo más <strong>1 % más tarde</strong> que el padre.</p></div>
+  </div>
+  <div class="card rv" style="margin-top:60px;display:flex;gap:40px;align-items:center">
+    <div style="flex:1"><h3>Python 3.13 · NumPy · Matplotlib</h3><p style="font-size:18px">100 individuos × 100 generaciones = 10 000 hijos por corrida, más los 100 iniciales. Para esta presentación el mismo algoritmo se tradujo a JavaScript y corre en vivo en la siguiente diapositiva.</p></div>
+    <div class="mono" style="font-size:15px;color:var(--muted);line-height:1.7;background:rgba(0,0,0,.3);padding:18px 22px;border-radius:16px;border:1px solid var(--line)">
+      <span style="color:var(--purple)">if</span> makespans[i] != makespans[v]:<br>&nbsp;&nbsp;&nbsp;&nbsp;hijo = gox(poblacion[i], poblacion[v])<br><span style="color:var(--purple)">else</span>:<br>&nbsp;&nbsp;&nbsp;&nbsp;hijo = mutacion(poblacion[i])<br><span style="color:var(--purple)">if</span> ms &lt;= makespans[i] * (1 + TOLERANCIA): <span style="color:var(--dim)"># acepta</span>
+    </div>
+  </div>
+</section>
+
+<!-- 13 · GA en vivo ft10 -->
+<section class="slide" data-tag="Demo en vivo · ft10" style="--gx:50%;--gy:0%" data-live="ft10">
+  <div class="kicker">8 · Reproducción en código · en vivo</div>
+  <div class="row" style="align-items:flex-end;justify-content:space-between">
+    <h2 style="margin:0">ft10 <em>evolucionando</em></h2>
+    <div class="controls">
+      <label class="seed">semilla <input type="number" min="1" max="9999" value="79" data-role="seed"></label>
+      <button class="pill" data-role="speed">Velocidad: normal</button>
+      <button class="pill" data-role="reset">Reiniciar</button>
+      <button class="pill primary" data-role="run">▶ Evolucionar</button>
+    </div>
+  </div>
+  <div class="row" style="margin-top:28px;gap:24px">
+    <div class="col" style="width:250px;gap:16px">
+      <div class="card stat"><div class="label">Generación</div><div class="val" data-role="gen">0</div></div>
+      <div class="card stat glow"><div class="label">Mejor makespan</div><div class="val grad-text" data-role="best">–</div><div class="note" data-role="gap"></div></div>
+      <div class="card stat"><div class="label">Promedio</div><div class="val" data-role="avg">–</div></div>
+      <div class="card stat"><div class="label">Cruces · mutaciones</div><div class="val" style="font-size:26px" data-role="ops">0 · 0</div></div>
+    </div>
+    <div class="col grow" style="gap:16px">
+      <div class="card" style="padding:18px 22px"><div class="label" style="margin-bottom:4px">Mejor horario de la población</div><svg data-role="gantt" viewBox="0 0 1000 300" width="1000" height="300"></svg></div>
+      <div class="card" style="padding:18px 22px;position:relative"><svg data-role="chart" viewBox="0 0 1000 160" width="1000" height="160"></svg></div>
+    </div>
+  </div>
+</section>
+
+<!-- 14 · Resultados 100 corridas -->
+<section class="slide" data-tag="Resultados" style="--gx:85%;--gy:15%">
+  <div class="kicker">8.1 · Resultados de las 100 corridas (Python)</div>
+  <h2>A <em>1.7 %</em> del óptimo</h2>
+  <div class="row" style="gap:20px;margin-top:6px">
+    <div class="card glow grow rv"><div class="label">Mejor</div><div class="big grad-text" style="margin-top:10px">946</div><p>semilla 79 · +1.72 %</p></div>
+    <div class="card grow rv"><div class="label">Promedio</div><div class="big" style="margin-top:10px">985.9</div><p>+6.0 % sobre el óptimo</p></div>
+    <div class="card grow rv"><div class="label">Peor</div><div class="big" style="margin-top:10px">1020</div><p>+9.7 %</p></div>
+    <div class="card grow rv"><div class="label">Desv. est. muestral</div><div class="big" style="margin-top:10px">15.8</div><p>entre corridas</p></div>
+  </div>
+  <div class="row" style="margin-top:20px;gap:20px">
+    <div class="card grow rv" style="position:relative;padding:20px 24px"><div class="label">Mejor makespan de cada corrida · pasa el cursor</div><svg id="hist" viewBox="0 0 680 296" width="680" height="296"></svg></div>
+    <div class="card grow rv" style="position:relative;padding:20px 24px"><div class="label">Convergencia de la semilla 79</div><svg id="conv79" viewBox="0 0 680 296" width="680" height="296"></svg></div>
+  </div>
+</section>
+
+<!-- 15 · Antes / después -->
+<section class="slide" data-tag="Comparativa de generaciones" style="--gx:20%;--gy:20%">
+  <div class="kicker">8.1 · Comparativa de generaciones · semilla 79</div>
+  <div class="row" style="align-items:flex-end;justify-content:space-between">
+    <h2 style="margin:0">De <span id="ba-from">1122</span> a <em class="grad-text" style="padding-right:8px">946</em></h2>
+    <div class="controls"><button class="pill on" data-ba="0">Generación 0 · al azar</button><button class="pill" data-ba="1">Generación 100</button></div>
+  </div>
+  <div class="card rv" style="margin-top:30px;padding:24px 28px;position:relative">
+    <svg id="ba-gantt" viewBox="0 0 1360 480" width="1360" height="480"></svg>
+  </div>
+  <p class="note" style="margin-top:16px">Cada barra es una tarea (el número es su trabajo). Las barras se recorren a su nueva hora de inicio: es el mismo taller, solo cambió el <strong style="color:var(--text)">orden</strong>. Mejora de 15.7 %.</p>
+</section>
+
+<!-- 16 · Hospital: equivalencias -->
+<section class="slide" data-tag="Aplicación real" style="--gx:60%;--gy:80%">
+  <div class="kicker">Aplicación en la vida real</div>
+  <h2 style="margin-bottom:26px">Un <em>hospital</em> también es un taller</h2>
+  <div class="triple rv">
+    <div>
+      <div>
+        <div class="label">01 · El problema</div>
+        <h3 style="font-size:32px;margin-top:18px;line-height:1.2">Una mañana en el área de estudios de una clínica</h3>
+        <p style="margin-top:14px;font-size:18px">8 pacientes, cada uno con su <strong>ruta de estudios</strong> indicada por el médico. Cada área atiende a <strong>un paciente a la vez</strong> y un estudio no se interrumpe.</p>
+      </div>
+      <div class="n">01</div>
+    </div>
+    <div>
+      <div>
+        <div class="label">02 · La equivalencia</div>
+        <p style="margin-top:18px;font-size:19px;line-height:1.9;color:#120f22">
+          Trabajo → <b>paciente</b><br>Máquina → <b>área</b> (laboratorio, rayos X…)<br>Tarea → <b>estudio</b><br>Orden tecnológico → <b>ruta clínica</b><br>Makespan → <b>hora en que sale el último</b><br>Cromosoma → <b>lista de turnos</b></p>
+      </div>
+      <div class="n">02</div>
+    </div>
+    <div>
+      <div>
+        <div class="label">03 · El beneficio</div>
+        <h3 style="font-size:32px;margin-top:18px;line-height:1.2">Mismo personal, <em>menos espera</em></h3>
+        <p style="margin-top:14px;font-size:18px">Sin contratar ni comprar equipo: solo cambiando el <strong>orden de los turnos</strong>, el último paciente sale antes, las áreas pasan menos tiempo ociosas y baja la espera en sala.</p>
+      </div>
+      <div class="n">03</div>
+    </div>
+  </div>
+</section>
+
+<!-- 17 · Hospital: demo -->
+<section class="slide" data-tag="Aplicación real · en vivo" style="--gx:90%;--gy:10%" data-live="hospital">
+  <div class="kicker">Aplicación en la vida real · en vivo</div>
+  <div class="row" style="align-items:flex-end;justify-content:space-between">
+    <h2 style="margin:0">8 pacientes, 5 <em>áreas</em></h2>
+    <div class="controls">
+      <label class="seed">semilla <input type="number" min="1" max="9999" value="1" data-role="seed"></label>
+      <button class="pill" data-role="speed">Velocidad: normal</button>
+      <button class="pill" data-role="reset">Reiniciar</button>
+      <button class="pill primary" data-role="run">▶ Evolucionar</button>
+    </div>
+  </div>
+  <div class="patients" id="patients" style="margin-top:22px"></div>
+  <div class="row" style="margin-top:18px;gap:24px">
+    <div class="col" style="width:300px;gap:14px">
+      <div class="card stat"><div class="label">En orden de llegada</div><div class="val" style="font-size:36px">11:20 <span class="note">200 min</span></div></div>
+      <div class="card stat glow"><div class="label">Con el algoritmo genético</div><div class="val grad-text" style="font-size:36px" data-role="best">–</div><div class="note" data-role="gap"></div></div>
+      <div class="card stat"><div class="label">Generación</div><div class="val" style="font-size:36px" data-role="gen">0</div><div data-role="badge" style="margin-top:8px"></div></div>
+    </div>
+    <div class="card grow" style="padding:18px 22px"><svg data-role="gantt" viewBox="0 0 1020 360" width="1020" height="360"></svg></div>
+  </div>
+</section>
+
+<!-- 18 · Referencias -->
+<section class="slide" data-tag="Fuentes" style="--gx:50%;--gy:100%">
+  <div class="kicker">Fuentes</div>
+  <h2 style="font-size:60px">Referencias</h2>
+  <ul class="refs" style="margin-top:10px;columns:2;column-gap:60px">
+    <li>Applegate, D., y Cook, W. (1991). A computational study of the job-shop scheduling problem. <em>ORSA Journal on Computing, 3</em>(2), 149-156. <a href="https://doi.org/10.1287/ijoc.3.2.149">https://doi.org/10.1287/ijoc.3.2.149</a></li>
+    <li>Beasley, J. E. (s. f.). <em>OR-Library: Job shop scheduling</em> [Conjunto de datos]. Brunel University London. Recuperado el 18 de octubre de 2026, de <a href="https://people.brunel.ac.uk/~mastjjb/jeb/orlib/jobshopinfo.html">https://people.brunel.ac.uk/~mastjjb/jeb/orlib/jobshopinfo.html</a></li>
+    <li>Beasley, J. E. (1990). OR-Library: Distributing test problems by electronic mail. <em>Journal of the Operational Research Society, 41</em>(11), 1069-1072. <a href="https://doi.org/10.1057/jors.1990.166">https://doi.org/10.1057/jors.1990.166</a></li>
+    <li>Bierwirth, C. (1995). A generalized permutation approach to job shop scheduling with genetic algorithms. <em>OR Spektrum, 17</em>(2-3), 87-92. <a href="https://doi.org/10.1007/BF01719250">https://doi.org/10.1007/BF01719250</a></li>
+    <li>Carlier, J., y Pinson, E. (1989). An algorithm for solving the job-shop problem. <em>Management Science, 35</em>(2), 164-176. <a href="https://doi.org/10.1287/mnsc.35.2.164">https://doi.org/10.1287/mnsc.35.2.164</a></li>
+    <li>Larrañaga, P., Kuijpers, C. M. H., Murga, R. H., Inza, I., y Dizdarevic, S. (1999). Genetic algorithms for the travelling salesman problem: A review of representations and operators. <em>Artificial Intelligence Review, 13</em>(2), 129-170. <a href="https://doi.org/10.1023/A:1006529012972">https://doi.org/10.1023/A:1006529012972</a></li>
+    <li>McCarthy, J. (s. f.-a). <em>Branches of AI</em>. Stanford University. Recuperado el 18 de octubre de 2026, de <a href="http://jmc.stanford.edu/artificial-intelligence/what-is-ai/branches-of-ai.html">http://jmc.stanford.edu/artificial-intelligence/what-is-ai/branches-of-ai.html</a></li>
+    <li>McCarthy, J. (s. f.-b). <em>What is AI? / Basic questions</em>. Stanford University. Recuperado el 18 de octubre de 2026, de <a href="http://jmc.stanford.edu/artificial-intelligence/what-is-ai/index.html">http://jmc.stanford.edu/artificial-intelligence/what-is-ai/index.html</a></li>
+    <li>Peng, B., Lü, Z., y Cheng, T. C. E. (2014). <em>A tabu search/path relinking algorithm to solve the job shop scheduling problem</em> [Preprint]. arXiv. <a href="https://doi.org/10.48550/arXiv.1402.5613">https://doi.org/10.48550/arXiv.1402.5613</a></li>
+    <li>tamy0612. (s. f.). <em>JSPLIB: Benchmark instances for the job-shop scheduling problem</em> [Repositorio de GitHub]. Recuperado el 18 de octubre de 2026, de <a href="https://github.com/tamy0612/JSPLIB">https://github.com/tamy0612/JSPLIB</a></li>
+  </ul>
+</section>
+
+<div class="chrome">
+  <div class="brand"><i></i>GP-GA · Job Shop</div>
+  <div class="tag"><span id="tag"></span><b class="who" id="who"></b></div>
+  <div class="foot">Algoritmos Genéticos · Inteligencia Artificial · UAQ 2026</div>
+  <div class="num" id="num"></div>
+  <div class="progress" id="progress"></div>
+</div>
+<div class="tip" id="tip"></div>
+</div>
+
+<div class="nav"><button id="prev" aria-label="Anterior">←</button><button id="next" aria-label="Siguiente">→</button><button id="full" aria-label="Pantalla completa">⛶</button></div>
+<div class="help">← → o espacio para avanzar · F pantalla completa · Inicio / Fin</div>
+
+<script>
+// GP-GA de Bierwirth (1995), traducción fiel de jobshop_genetico.py
+const GA = (() => {
+  const PROB_RANKING = [0.4, 0.3, 0.2, 0.1];
+  const TOLERANCIA = 0.01;
+
+  // Generador pseudoaleatorio con semilla (mulberry32) para corridas reproducibles
+  function rng(semilla) {
+    let a = semilla >>> 0;
+    return () => {
+      a = (a + 0x6D2B79F5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  const entero = (r, a, b) => a + Math.floor(r() * (b - a + 1)); // [a, b]
+
+  // Constructor de horarios activos con forcing
+  function decodificar(cromosoma, maquinas, tiempos) {
+    const n = maquinas.length, m = maquinas[0].length;
+    const siguiente = new Array(n).fill(0), finTrabajo = new Array(n).fill(0);
+    const ocupado = Array.from({ length: m }, () => []);
+    const horario = [];
+    for (const j of cromosoma) {
+      const k = siguiente[j], maq = maquinas[j][k], p = tiempos[j][k];
+      const listo = finTrabajo[j];
+      let inicio = null, anteriorFin = 0;
+      const occ = ocupado[maq];
+      for (let pos = 0; pos < occ.length; pos++) {
+        const t = Math.max(listo, anteriorFin);
+        if (t + p <= occ[pos][0]) { inicio = t; occ.splice(pos, 0, [t, t + p, j]); break; }
+        anteriorFin = occ[pos][1];
+      }
+      if (inicio === null) { inicio = Math.max(listo, anteriorFin); occ.push([inicio, inicio + p, j]); }
+      finTrabajo[j] = inicio + p;
+      siguiente[j]++;
+      horario.push({ j, k, maq, ini: inicio, fin: inicio + p });
+    }
+    const makespan = Math.max(...finTrabajo);
+    const orden = horario.map((_, i) => i).sort((a, b) => horario[a].ini - horario[b].ini || a - b);
+    return { makespan, horario, forzado: orden.map(i => horario[i].j) };
+  }
+
+  function cromosomaAleatorio(n, m, r) {
+    const c = [];
+    for (let j = 0; j < n; j++) for (let k = 0; k < m; k++) c.push(j);
+    for (let i = c.length - 1; i > 0; i--) { const x = Math.floor(r() * (i + 1)); [c[i], c[x]] = [c[x], c[i]]; }
+    return c;
+  }
+
+  function vecinosOrdenados(i, makespans) {
+    const N = makespans.length;
+    return [(i - 2 + N) % N, (i - 1 + N) % N, (i + 1) % N, (i + 2) % N]
+      .sort((a, b) => makespans[a] - makespans[b]);
+  }
+
+  function elegirVecino(i, makespans, r) {
+    const v = vecinosOrdenados(i, makespans);
+    let x = r(), acc = 0;
+    for (let q = 0; q < 4; q++) { acc += PROB_RANKING[q]; if (x < acc) return v[q]; }
+    return v[3];
+  }
+
+  const conIndices = c => { const cuenta = {}; return c.map(g => [g, (cuenta[g] = (cuenta[g] || 0) + 1)]); };
+  const clave = ([g, i]) => g + ":" + i;
+
+  // GOX: devuelve el hijo y los detalles para animarlo
+  function gox(receptor, donador, r, inicio, largo) {
+    const L = receptor.length;
+    if (inicio === undefined) { largo = entero(r, Math.ceil(L / 3), Math.floor(L / 2)); inicio = Math.floor(r() * L); }
+    const R = conIndices(receptor), D = conIndices(donador);
+    const posiciones = Array.from({ length: largo }, (_, k) => (inicio + k) % L);
+    const cadena = posiciones.map(p => D[p]);
+    const marcados = new Set(cadena.map(clave));
+    let hijo;
+    if (inicio + largo <= L) {
+      const corte = R.findIndex(g => clave(g) === clave(cadena[0])) + 1;
+      hijo = [...R.slice(0, corte).filter(g => !marcados.has(clave(g))), ...cadena,
+              ...R.slice(corte).filter(g => !marcados.has(clave(g)))];
+    } else {
+      const cabeza = D.slice(inicio), cola = D.slice(0, inicio + largo - L);
+      hijo = [...cola, ...R.filter(g => !marcados.has(clave(g))), ...cabeza];
+    }
+    return { hijo: hijo.map(([g]) => g), hijoIdx: hijo, posiciones, marcados, R, D };
+  }
+
+  function mutacion(c, r) {
+    c = c.slice();
+    const de = Math.floor(r() * c.length);
+    let a = Math.floor(r() * (c.length - 1)); if (a >= de) a++;
+    const [gen] = c.splice(de, 1);
+    c.splice(a, 0, gen);
+    return c;
+  }
+
+  // Corrida paso a paso: crear() y luego generacion() repetidamente
+  function crear(maquinas, tiempos, semilla, tam = 100) {
+    const r = rng(semilla), n = maquinas.length, m = maquinas[0].length;
+    const poblacion = [], makespans = [];
+    for (let i = 0; i < tam; i++) {
+      const d = decodificar(cromosomaAleatorio(n, m, r), maquinas, tiempos);
+      poblacion.push(d.forzado); makespans.push(d.makespan);
+    }
+    const best = makespans.indexOf(Math.min(...makespans));
+    const prom = makespans.reduce((a, b) => a + b, 0) / tam;
+    return { r, maquinas, tiempos, poblacion, makespans, gen: 0, cruces: 0, mutaciones: 0,
+             histMejor: [makespans[best]], histProm: [prom], inicial: poblacion[best].slice() };
+  }
+
+  function generacion(e) {
+    const N = e.poblacion.length;
+    for (let i = 0; i < N; i++) {
+      const v = elegirVecino(i, e.makespans, e.r);
+      let hijo;
+      if (e.makespans[i] !== e.makespans[v]) { hijo = gox(e.poblacion[i], e.poblacion[v], e.r).hijo; e.cruces++; }
+      else { hijo = mutacion(e.poblacion[i], e.r); e.mutaciones++; }
+      const d = decodificar(hijo, e.maquinas, e.tiempos);
+      if (d.makespan <= e.makespans[i] * (1 + TOLERANCIA)) { e.poblacion[i] = d.forzado; e.makespans[i] = d.makespan; }
+    }
+    e.gen++;
+    const mejor = Math.min(...e.makespans);
+    e.histMejor.push(mejor);
+    e.histProm.push(e.makespans.reduce((a, b) => a + b, 0) / N);
+    return e;
+  }
+
+  const mejorDe = e => e.poblacion[e.makespans.indexOf(Math.min(...e.makespans))];
+
+  return { rng, decodificar, gox, mutacion, crear, generacion, mejorDe, vecinosOrdenados, PROB_RANKING };
+})();
+if (typeof module !== "undefined") module.exports = GA;
+
+</script>
+<script>
+const DATA = {"maquinas":[[0,1,2,3,4,5,6,7,8,9],[0,2,4,9,3,1,6,5,7,8],[1,0,3,2,8,5,7,6,9,4],[1,2,0,4,6,8,7,3,9,5],[2,0,1,5,3,4,8,7,9,6],[2,1,5,3,8,9,0,6,4,7],[1,0,3,2,6,5,9,8,7,4],[2,0,1,5,4,6,8,9,7,3],[0,1,3,5,2,9,6,7,4,8],[1,0,2,6,8,9,5,3,4,7]],"tiempos":[[29,78,9,36,49,11,62,56,44,21],[43,90,75,11,69,28,46,46,72,30],[91,85,39,74,90,10,12,89,45,33],[81,95,71,99,9,52,85,98,22,43],[14,6,22,61,26,69,21,49,72,53],[84,2,52,95,48,72,47,65,6,25],[46,37,61,13,32,21,32,89,30,55],[31,86,46,74,32,88,19,48,36,79],[76,69,76,51,85,11,40,89,26,74],[85,13,61,7,64,76,47,52,90,45]],"s79":{"c":[3,5,8,0,3,5,5,6,1,9,5,6,4,3,7,8,1,6,5,4,3,9,7,5,4,8,4,2,9,1,3,5,3,8,4,9,6,6,7,2,3,9,5,6,8,1,4,1,6,0,7,6,5,5,8,2,9,8,7,0,1,0,2,8,7,4,3,0,9,2,0,8,6,0,6,4,3,9,7,2,1,3,2,8,7,9,0,2,1,4,7,0,7,1,2,4,2,0,1,9],"ini":[0,6,7,1,4,5,3,6,6,8,5,1,5,8,7,6,1,3,6,0,8,6,4,1,6,3,8,0,9,6,0,0,5,8,2,9,3,0,6,9,8,5,1,8,2,4,8,5,6,9,7,4,3,9,1,7,2,5,9,3,1,8,2,4,3,0,7,9,4,2,7,1,3,0,2,4,5,2,7,4,9,3,8,7,3,2,5,5,9,4,7,0,7,9,2,4,1,0,2,1],"hm":[1122,1107,1107,1107,1099,1063,1063,1056,1051,1051,1051,1051,1051,1049,1049,1049,1049,1051,1044,1044,1044,1044,1047,1038,1038,1038,1038,1030,1026,1026,1017,1017,1015,1015,1017,1017,1017,1017,1017,1017,1017,1017,1017,1012,1011,1012,1012,1001,1001,1001,997,997,997,997,997,997,997,997,997,997,995,995,997,985,985,976,976,976,975,975,970,970,970,970,970,970,949,949,949,949,949,949,946,946,946,946,946,946,946,946,946,946,946,946,946,946,946,946,946,946,946],"hp":[1268.24,1236.41,1216.02,1198.76,1186.21,1173.76,1165.49,1155.41,1146.53,1137.18,1128.37,1122.17,1119.64,1115.76,1111.97,1108.91,1105.96,1102.58,1099.1,1095.29,1091.87,1086.79,1082.12,1078.88,1077.73,1076.7,1075.03,1073.86,1072.27,1070.97,1069.46,1068.17,1067.31,1065.68,1064.46,1063.46,1063.11,1062.51,1062.32,1060.1,1059.32,1058.89,1058.51,1057.95,1057.14,1056.49,1055.2,1053.09,1052.15,1051.41,1051.34,1050.38,1049.95,1049.36,1048.45,1047.08,1046.04,1044.6,1044.2,1042.96,1041.81,1040.42,1039.65,1038.19,1037.24,1035.66,1034.24,1033.62,1033.15,1032.66,1031.85,1031.26,1030.21,1029.27,1029.13,1028.37,1027.91,1027.01,1026.17,1026.29,1026.68,1026.68,1025.23,1023.76,1022.67,1021.48,1021.01,1020.72,1019.93,1019.76,1019.71,1019.55,1019.38,1019.2,1017.95,1017.65,1017.36,1016.99,1015.11,1013.41,1013.41]},"ms100":[966,983,977,1001,967,994,985,1008,988,1017,986,984,995,994,974,1007,982,1011,991,984,997,985,960,981,961,997,984,981,994,971,973,982,1004,982,979,1003,1010,984,958,967,1014,963,991,999,985,967,974,998,983,988,988,1000,994,968,982,992,986,1015,954,981,984,982,995,1010,969,994,1010,951,965,997,972,988,1016,973,989,998,1000,982,946,1003,984,1020,984,991,996,969,989,959,965,971,983,994,1013,995,963,995,993,975,977,982]};
+// ---------- Utilidades ----------
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const NS = "http://www.w3.org/2000/svg";
+const svgEl = (tag, attrs = {}, parent) => {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+};
+const COLORS = ["#a58bff", "#5ee6b0", "#ff8a5c", "#5cc8ff", "#ffd166", "#ff6b9d", "#b8f35e", "#e0a3ff", "#4fd1c5", "#f2a65a"];
+COLORS.forEach((c, i) => document.documentElement.style.setProperty("--j" + i, c));
+const SUB = "₀₁₂₃₄₅₆₇₈₉";
+const sub = n => String(n).split("").map(d => SUB[d]).join("");
+const stage = $("#stage");
+let scale = 1;
+const tip = $("#tip");
+function showTip(ev, html) {
+  const r = stage.getBoundingClientRect();
+  tip.innerHTML = html;
+  tip.style.left = (ev.clientX - r.left) / scale + 14 + "px";
+  tip.style.top = (ev.clientY - r.top) / scale - 44 + "px";
+  tip.style.opacity = 1;
+}
+const hideTip = () => (tip.style.opacity = 0);
+
+// ---------- Diagrama de Gantt reutilizable ----------
+function Gantt(svg, o) {
+  const W = +svg.getAttribute("width"), H = +svg.getAttribute("height");
+  const L = o.left || 52, T = 8, B = 28, R = 16;
+  const rowH = (H - T - B) / o.rows.length;
+  const bars = {};
+  const gAxis = svgEl("g", { class: "axis" }, svg);
+  o.rows.forEach((name, q) => {
+    svgEl("rect", { x: L, y: T + q * rowH + 2, width: W - L - R, height: rowH - 4, rx: 8, fill: "rgba(255,255,255,.025)" }, gAxis);
+    const t = svgEl("text", { x: L - 12, y: T + q * rowH + rowH / 2 + 5, "text-anchor": "end" }, gAxis);
+    t.textContent = name;
+  });
+  const gTicks = svgEl("g", { class: "axis" }, svg);
+  const gBars = svgEl("g", {}, svg);
+  const gRefs = svgEl("g", {}, svg);
+  let sx = 1;
+  function ticks(xmax) {
+    gTicks.innerHTML = "";
+    const step = o.tickStep || 100;
+    for (let x = 0; x <= xmax; x += step) {
+      const X = L + x * sx;
+      svgEl("line", { x1: X, x2: X, y1: T, y2: H - B }, gTicks);
+      const t = svgEl("text", { x: X, y: H - 8, "text-anchor": "middle" }, gTicks);
+      t.textContent = o.fmt ? o.fmt(x) : x;
+    }
+  }
+  function draw(horario, refs = [], xmax = o.xmax) {
+    sx = (W - L - R) / xmax;
+    ticks(xmax);
+    const seen = new Set();
+    for (const h of horario) {
+      const key = h.j + "-" + h.k;
+      seen.add(key);
+      let b = bars[key];
+      const w = (h.fin - h.ini) * sx, hh = rowH * 0.72;
+      if (!b) {
+        b = bars[key] = svgEl("g", { class: "bar" }, gBars);
+        b.r = svgEl("rect", { rx: 5, height: hh, fill: COLORS[h.j % 10], stroke: "#0b0916", "stroke-width": 1.2 }, b);
+        b.t = svgEl("text", { y: hh / 2 + 5, "text-anchor": "middle", fill: "#120f22", "font-size": o.font || 12, "font-weight": 700 }, b);
+        b.t.textContent = o.label ? o.label(h) : h.j + 1;
+        b.style.transform = `translate(${L}px, ${T + h.maq * rowH + (rowH - hh) / 2}px)`;
+        b.addEventListener("mousemove", ev => o.tip && showTip(ev, o.tip(b.h)));
+        b.addEventListener("mouseleave", hideTip);
+        b.getBoundingClientRect(); // fuerza el estado inicial para que la transición se vea
+      }
+      b.h = h;
+      b.r.setAttribute("width", Math.max(w - 1, 1));
+      b.t.setAttribute("x", w / 2);
+      b.t.style.display = w >= (o.minLabel || 20) ? "" : "none";
+      b.style.opacity = 1;
+      b.style.transform = `translate(${L + h.ini * sx}px, ${T + h.maq * rowH + (rowH - hh) / 2}px)`;
+    }
+    for (const k in bars) if (!seen.has(k)) bars[k].style.opacity = 0;
+    gRefs.innerHTML = "";
+    for (const r of refs) {
+      const X = L + r.x * sx;
+      svgEl("line", { x1: X, x2: X, y1: T - 4, y2: H - B + 2, stroke: r.color, "stroke-width": r.w || 1.6, "stroke-dasharray": r.dash || "" }, gRefs);
+      const t = svgEl("text", { x: X + (r.anchor === "end" ? -8 : 8), y: T + (r.dy || 12), fill: r.color, "font-size": 13, "font-weight": 600, "text-anchor": r.anchor || "start" }, gRefs);
+      t.textContent = r.label;
+    }
+  }
+  function clear() { for (const k in bars) { bars[k].remove(); delete bars[k]; } gRefs.innerHTML = ""; }
+  return { draw, clear };
+}
+
+// ---------- Gráfica de líneas ----------
+function LineChart(svg, o) {
+  const W = +svg.getAttribute("width"), H = +svg.getAttribute("height");
+  const L = 56, T = 14, B = 30, R = 18;
+  svg.innerHTML = "";
+  const gA = svgEl("g", { class: "axis" }, svg), gS = svgEl("g", {}, svg), gH = svgEl("g", {}, svg);
+  let st = { ymin: 0, ymax: 1, xmax: 1 };
+  const X = x => L + (x / st.xmax) * (W - L - R), Y = y => T + (1 - (y - st.ymin) / (st.ymax - st.ymin)) * (H - T - B);
+  function axes() {
+    gA.innerHTML = "";
+    const span = st.ymax - st.ymin, step = span > 300 ? 100 : span > 120 ? 50 : 20;
+    for (let y = Math.ceil(st.ymin / step) * step; y <= st.ymax; y += step) {
+      svgEl("line", { x1: L, x2: W - R, y1: Y(y), y2: Y(y) }, gA);
+      svgEl("text", { x: L - 10, y: Y(y) + 4, "text-anchor": "end" }, gA).textContent = y;
+    }
+    for (let x = 0; x <= st.xmax; x += st.xmax >= 100 ? 20 : 10)
+      svgEl("text", { x: X(x), y: H - 8, "text-anchor": "middle" }, gA).textContent = x;
+    if (o.ref) {
+      svgEl("line", { x1: L, x2: W - R, y1: Y(o.ref.y), y2: Y(o.ref.y), stroke: "#7ef2c4", "stroke-dasharray": "5 5", "stroke-width": 1.4 }, gA);
+      svgEl("text", { x: L + 10, y: Y(o.ref.y) + 16, fill: "#7ef2c4", "font-size": 13 }, gA).textContent = o.ref.label;
+    }
+  }
+  function draw(series, ymin, ymax, xmax) {
+    st = { ymin, ymax, xmax };
+    axes();
+    gS.innerHTML = "";
+    for (const s of series) {
+      if (!s.data.length) continue;
+      const pts = s.data.map((y, x) => (s.step && x ? `${X(x)},${Y(s.data[x - 1])} ` : "") + `${X(x)},${Y(y)}`).join(" ");
+      svgEl("polyline", { points: pts, fill: "none", stroke: s.color, "stroke-width": s.w || 2, "stroke-linejoin": "round" }, gS);
+    }
+    if (o.legend) {
+      let lx = L + 14;
+      for (const s of series) {
+        svgEl("rect", { x: lx, y: T + 4, width: 18, height: 4, rx: 2, fill: s.color }, gS);
+        const t = svgEl("text", { x: lx + 26, y: T + 10, fill: "#a7a2c3", "font-size": 13 }, gS);
+        t.textContent = s.name;
+        lx += 40 + s.name.length * 7.2;
+      }
+    }
+    o.series = series;
+  }
+  if (o.hover) {
+    const ln = svgEl("line", { y1: T, y2: H - B, stroke: "rgba(255,255,255,.3)", opacity: 0 }, gH);
+    svg.addEventListener("mousemove", ev => {
+      const r = svg.getBoundingClientRect(), x = Math.round(((ev.clientX - r.left) / r.width * W - L) / (W - L - R) * st.xmax);
+      if (x < 0 || x > st.xmax || !o.series) return;
+      ln.setAttribute("x1", X(x)); ln.setAttribute("x2", X(x)); ln.setAttribute("opacity", 1);
+      showTip(ev, `Generación <b>${x}</b><br>` + o.series.map(s => `${s.name}: <b>${(+s.data[x]).toFixed(s.dec || 0)}</b>`).join("<br>"));
+    });
+    svg.addEventListener("mouseleave", () => { ln.setAttribute("opacity", 0); hideTip(); });
+  }
+  return { draw };
+}
+
+// ---------- Datos ----------
+const FT = { maq: DATA.maquinas, tie: DATA.tiempos };
+const S79 = DATA.s79;
+const MS100 = DATA.ms100;
+const HOSP = {
+  areas: ["Laboratorio", "Rayos X", "Ultrasonido", "Electrocardiograma", "Consulta"],
+  corto: ["Lab", "RX", "US", "ECG", "Cons"],
+  pacientes: ["Chequeo general", "Dolor abdominal", "Pre-operatorio", "Dolor de pecho", "Lesión deportiva", "Control de diabetes", "Revisión de riñón", "Valoración pulmonar"],
+  rutas: [
+    [[0, 15], [3, 20], [1, 10], [2, 25], [4, 20]],
+    [[4, 15], [0, 10], [2, 30], [1, 15], [3, 10]],
+    [[0, 20], [1, 15], [3, 25], [4, 15], [2, 10]],
+    [[3, 25], [0, 15], [1, 20], [4, 20], [2, 15]],
+    [[1, 25], [2, 20], [4, 15], [0, 10], [3, 15]],
+    [[0, 10], [4, 25], [3, 15], [2, 20], [1, 10]],
+    [[2, 15], [1, 20], [0, 15], [3, 10], [4, 25]],
+    [[4, 20], [3, 15], [2, 10], [1, 25], [0, 20]],
+  ],
+};
+HOSP.maq = HOSP.rutas.map(r => r.map(x => x[0]));
+HOSP.tie = HOSP.rutas.map(r => r.map(x => x[1]));
+const reloj = min => { const t = 8 * 60 + min; return Math.floor(t / 60) + ":" + String(t % 60).padStart(2, "0"); };
+
+// ---------- Navegación ----------
+const PRESENTA = { U: { nombre: "Uriel", color: "#a58bff" }, O: { nombre: "Oscar", color: "#7ef2c4" }, D: { nombre: "David", color: "#ff8a5c" } };
+const slides = $$(".slide");
+let cur = 0;
+const hooks = {}; // id de diapositiva -> { enter, leave }
+function go(i) {
+  i = Math.max(0, Math.min(slides.length - 1, i));
+  if (i === cur && slides[i].classList.contains("active")) return;
+  const prev = slides[cur];
+  prev.classList.remove("active");
+  hooks[prev.dataset.key]?.leave?.();
+  cur = i;
+  const s = slides[i];
+  s.classList.add("active");
+  $("#tag").textContent = s.dataset.tag || "";
+  const who = PRESENTA[s.dataset.who], badge = $("#who");
+  badge.classList.toggle("on", !!who);
+  if (who) { badge.textContent = s.dataset.who; badge.style.background = who.color; badge.title = "Presenta: " + who.nombre; }
+  $("#num").textContent = String(i + 1).padStart(2, "0") + " / " + slides.length;
+  $("#progress").style.width = ((i + 1) / slides.length) * 100 + "%";
+  hideTip();
+  history.replaceState(null, "", "#" + (i + 1));
+  hooks[s.dataset.key]?.enter?.();
+}
+slides.forEach((s, i) => (s.dataset.key = s.id || "s" + i));
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT") return;
+  if (["ArrowRight", "PageDown", " "].includes(e.key)) { e.preventDefault(); go(cur + 1); }
+  else if (["ArrowLeft", "PageUp"].includes(e.key)) { e.preventDefault(); go(cur - 1); }
+  else if (e.key === "Home") go(0);
+  else if (e.key === "End") go(slides.length - 1);
+  else if (e.key.toLowerCase() === "f") toggleFull();
+});
+const toggleFull = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.();
+$("#prev").onclick = () => go(cur - 1);
+$("#next").onclick = () => go(cur + 1);
+$("#full").onclick = toggleFull;
+function fit() {
+  scale = Math.min(innerWidth / 1600, innerHeight / 900);
+  stage.style.transform = `translate(-50%, -50%) scale(${scale})`;
+}
+addEventListener("resize", fit);
+fit();
+
+// ---------- Portada ----------
+(() => {
+  const f = $("#floaters");
+  const pos = [[30, 40], [150, 0], [280, 60], [390, 10], [80, 170], [220, 150], [350, 200], [10, 300], [140, 290], [270, 330], [400, 320], [190, 380]];
+  pos.forEach(([x, y], i) => {
+    const s = document.createElement("span");
+    const j = (i * 7) % 10;
+    s.textContent = j + 1;
+    s.style.cssText = `left:${x}px;top:${y}px;background:${COLORS[j]};animation-delay:${-i * 0.7}s;opacity:${0.55 + (i % 3) * 0.15}`;
+    f.appendChild(s);
+  });
+})();
+
+// ---------- Agenda ----------
+(() => {
+  const items = [["Fuentes", 3], ["Planteamiento", 4], ["Representación", 5], ["Función objetivo", 6], ["Parámetros", 7], ["Población y selección", 8], ["Cruce", 9], ["Mutación", 10], ["Código en vivo", 12], ["Resultados", 13], ["Aplicación real", 15]];
+  const a = $("#agenda");
+  for (const [t, i] of items) {
+    const b = document.createElement("button");
+    b.className = "pill"; b.textContent = t; b.onclick = () => go(i);
+    a.appendChild(b);
+  }
+})();
+
+// ---------- Fichas de cromosoma ----------
+function geneEl(g, idx, letters) {
+  const d = document.createElement("div");
+  d.className = "gene";
+  d.style.background = COLORS[g];
+  d.innerHTML = (letters ? letters[g] : g + 1) + (idx ? `<sub>${sub(idx)}</sub>` : "");
+  return d;
+}
+
+// ---------- Decodificador 3 × 3 ----------
+(() => {
+  const M = [[0, 1, 2], [1, 2, 0], [2, 0, 1]], P = [[3, 2, 2], [2, 3, 2], [3, 2, 3]], LET = "ABC";
+  const fila = [0, 0, 0, 1, 1, 1, 2, 2, 2];
+  // Mejor orden por fuerza bruta sobre las 1680 permutaciones distintas
+  let best = null, bestMs = Infinity;
+  (function perm(c, cnt) {
+    if (c.length === 9) { const ms = GA.decodificar(c, M, P).makespan; if (ms < bestMs) { bestMs = ms; best = c.slice(); } return; }
+    for (let j = 0; j < 3; j++) if (cnt[j]) { cnt[j]--; c.push(j); perm(c, cnt); c.pop(); cnt[j]++; }
+  })([], [3, 3, 3]);
+  let crom = fila.slice(), sel = null, timer = null;
+  const box = $("#dec-genes");
+  const g = Gantt($("#dec-gantt"), { rows: ["M1", "M2", "M3"], xmax: 16, tickStep: 1, left: 50, font: 15, label: h => LET[h.j] + (h.k + 1), minLabel: 10,
+    tip: h => `${LET[h.j]}, tarea ${h.k + 1} en M${h.maq + 1}<br>de ${h.ini} a ${h.fin}` });
+  function render(upto = 9, hi = -1) {
+    box.innerHTML = "";
+    const cuenta = [0, 0, 0];
+    crom.forEach((j, i) => {
+      const d = geneEl(j, ++cuenta[j], LET);
+      d.classList.add("click");
+      if (i === sel) d.classList.add("sel");
+      if (i === hi) d.classList.add("cur");
+      if (i >= upto && upto < 9) d.style.opacity = .35;
+      d.title = `${LET[j]}, tarea ${cuenta[j]} → M${M[j][cuenta[j] - 1] + 1}`;
+      d.onclick = () => {
+        stop();
+        if (sel === null) sel = i;
+        else { [crom[sel], crom[i]] = [crom[i], crom[sel]]; sel = null; }
+        render(); show();
+      };
+      box.appendChild(d);
+    });
+  }
+  function show(upto = 9) {
+    const full = GA.decodificar(crom, M, P);
+    const part = GA.decodificar(crom.slice(0, upto), M, P);
+    g.draw(part.horario, upto === 9 ? [{ x: full.makespan, label: "termina en " + full.makespan, color: "#ff6b6b", dash: "5 4" }] : []);
+    $("#dec-ms").textContent = upto === 9 ? full.makespan : "…";
+    $("#dec-badge").innerHTML = upto === 9 ? (full.makespan === bestMs ? `<span class="badge">el mejor posible</span>` : `<span class="badge red">se puede mejorar: ${bestMs}</span>`) : "";
+  }
+  function stop() { clearInterval(timer); timer = null; }
+  function paso() {
+    stop(); sel = null;
+    let k = 0;
+    g.clear(); render(0, 0); show(0);
+    timer = setInterval(() => {
+      k++;
+      render(k, k < 9 ? k : -1); show(k);
+      if (k >= 9) stop();
+    }, 750);
+  }
+  $$("[data-dec]").forEach(b => b.onclick = () => {
+    const a = b.dataset.dec;
+    stop(); sel = null;
+    if (a === "fila") crom = fila.slice();
+    if (a === "mejor") crom = best.slice();
+    if (a === "azar") { const r = Math.random; for (let i = 8; i > 0; i--) { const x = Math.floor(r() * (i + 1)); [crom[i], crom[x]] = [crom[x], crom[i]]; } }
+    if (a === "paso") return paso();
+    render(); show();
+  });
+  render(); show();
+  hooks["s5"] = { leave: stop };
+})();
+
+// ---------- Anillo de selección ----------
+(() => {
+  const svg = $("#ring"), N = 100, C = 320, Rr = 250;
+  const e = GA.crear(FT.maq, FT.tie, 79);
+  const ms = e.makespans, lo = Math.min(...ms), hi = Math.max(...ms);
+  $("#ring-range").textContent = `${lo} – ${hi}`;
+  $("#ring-avg").textContent = `promedio ${(ms.reduce((a, b) => a + b) / N).toFixed(1)}`;
+  const mix = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
+  const col = m => { const t = (m - lo) / (hi - lo); const c = t < .5 ? mix([126, 242, 196], [139, 108, 255], t * 2) : mix([139, 108, 255], [255, 107, 107], (t - .5) * 2); return `rgb(${c})`; };
+  const pt = (i, r = Rr) => { const a = (i / N) * Math.PI * 2 - Math.PI / 2; return [C + r * Math.cos(a), C + r * Math.sin(a)]; };
+  svgEl("circle", { cx: C, cy: C, r: Rr, fill: "none", stroke: "rgba(255,255,255,.08)" }, svg);
+  const gL = svgEl("g", {}, svg);
+  const dots = [];
+  for (let i = 0; i < N; i++) {
+    const [x, y] = pt(i);
+    const d = svgEl("circle", { cx: x, cy: y, r: 8, fill: col(ms[i]), style: "cursor:pointer;transition:r .2s, opacity .2s" }, svg);
+    d.addEventListener("mousemove", ev => showTip(ev, `Individuo ${i + 1}<br>makespan <b>${ms[i]}</b>`));
+    d.addEventListener("mouseleave", hideTip);
+    d.onclick = () => select(i);
+    dots.push(d);
+  }
+  const info = $("#ring-info");
+  let selected = null;
+  function select(i, chosen = null) {
+    selected = i;
+    const v = GA.vecinosOrdenados(i, ms);
+    gL.innerHTML = "";
+    dots.forEach((d, k) => { d.setAttribute("r", 8); d.style.opacity = .35; d.setAttribute("stroke", "none"); });
+    dots[i].setAttribute("r", 14); dots[i].style.opacity = 1; dots[i].setAttribute("stroke", "#fff"); dots[i].setAttribute("stroke-width", 3);
+    // Las etiquetas se abren en abanico para no encimarse (los vecinos están pegados en el anillo)
+    const lado = { [(i - 2 + N) % N]: -2, [(i - 1 + N) % N]: -1, [(i + 1) % N]: 1, [(i + 2) % N]: 2 };
+    v.forEach((n, q) => {
+      dots[n].setAttribute("r", 12); dots[n].style.opacity = 1;
+      if (n === chosen) { dots[n].setAttribute("stroke", "#7ef2c4"); dots[n].setAttribute("stroke-width", 4); }
+      const a = i + lado[n] * 3.2 - Math.sign(lado[n]) * 1.4;
+      const [x1, y1] = pt(n, Rr + 14), [x2, y2] = pt(a, Rr + 34), [x, y] = pt(a, Rr + 56);
+      const c = n === chosen ? "#7ef2c4" : "#f4f2ff";
+      svgEl("line", { x1, y1, x2, y2, stroke: c, "stroke-opacity": .5 }, gL);
+      const t = svgEl("text", { x, y: y + 5, "text-anchor": "middle", fill: c, "font-size": 15, "font-weight": 600 }, gL);
+      t.textContent = Math.round(GA.PROB_RANKING[q] * 100) + "%";
+    });
+    const filas = v.map((n, q) => `<span style="color:${n === chosen ? "var(--mint)" : "var(--text)"}">${ms[n]} <small style="color:var(--dim)">${GA.PROB_RANKING[q] * 100}%</small></span>`).join(" · ");
+    let res = "";
+    if (chosen !== null) res = ms[i] !== ms[chosen]
+      ? `<p style="font-size:17px;margin-top:6px">Eligió <strong>${ms[chosen]}</strong> → distintos → <strong style="color:var(--red)">se cruzan (GOX)</strong></p>`
+      : `<p style="font-size:17px;margin-top:6px">Eligió <strong>${ms[chosen]}</strong> → iguales → <strong style="color:var(--mint)">se muta</strong></p>`;
+    info.innerHTML = `<div class="label">Individuo ${i + 1} · makespan ${ms[i]} · vecinos del mejor al peor</div><p style="font-size:17px;margin-top:6px">${filas}</p>${res}`;
+  }
+  $("#ring-pick").onclick = () => {
+    const i = selected ?? Math.floor(Math.random() * N);
+    const v = GA.vecinosOrdenados(i, ms);
+    let x = Math.random(), acc = 0, ch = v[3];
+    for (let q = 0; q < 4; q++) { acc += GA.PROB_RANKING[q]; if (x < acc) { ch = v[q]; break; } }
+    select(i, ch);
+  };
+  hooks["s8"] = { enter: () => selected === null && select(0) };
+})();
+
+// ---------- GOX paso a paso ----------
+(() => {
+  const LET = "ABC", toC = s => s.split(" ").map(x => LET.indexOf(x));
+  const rec = toC("B A B B C A C C B A"), don = toC("A B B A C A B C B C");
+  const cases = [{ inicio: 3, largo: 4 }, { inicio: 8, largo: 4 }];
+  let c = 0, step = 0;
+  const key = ([g, i]) => g + ":" + i;
+  function row(el, items, cls = () => "") {
+    el.innerHTML = "";
+    for (const it of items) {
+      if (!it) { const d = document.createElement("div"); d.className = "gene placeholder"; el.appendChild(d); continue; }
+      const d = geneEl(it[0], it[1], LET);
+      const k = cls(it); if (k) d.classList.add(...k.split(" "));
+      el.appendChild(d);
+    }
+  }
+  function render() {
+    const { inicio, largo } = cases[c];
+    const r = GA.gox(rec, don, null, inicio, largo);
+    const cadena = r.posiciones.map(p => r.D[p]), marc = r.marcados, enCadena = new Set(cadena.map(key));
+    const cadStr = cadena.map(([g, i]) => LET[g] + sub(i)).join(" ");
+    row($("#gox-r"), r.R, g => step >= 2 && marc.has(key(g)) ? "mark" : "");
+    row($("#gox-d"), r.D, g => step >= 1 && enCadena.has(key(g)) ? "hot" : step >= 1 ? "ghost" : "");
+    let hijo = Array(10).fill(null);
+    if (step === 3) {
+      // Receptor completo con la cadena implantada; los marcados siguen visibles
+      if (inicio + largo <= 10) {
+        const corte = r.R.findIndex(g => key(g) === key(cadena[0])) + 1;
+        hijo = [...r.R.slice(0, corte).map(g => [...g, "m"]), ...cadena.map(g => [...g, "c"]), ...r.R.slice(corte).map(g => [...g, "m"])];
+      } else {
+        hijo = [...r.D.slice(0, inicio + largo - 10).map(g => [...g, "c"]), ...r.R.map(g => [...g, "m"]), ...r.D.slice(inicio).map(g => [...g, "c"])];
+      }
+    }
+    if (step === 4) hijo = r.hijoIdx.map(g => [...g, enCadena.has(key(g)) ? "c" : ""]);
+    row($("#gox-h"), hijo, g => g[2] === "c" ? "hot" : g[2] === "m" && marc.has(key(g)) ? "mark" : "");
+    const T = [
+      ["Los padres", "Cada gen lleva un índice: cuántas veces ha aparecido su trabajo. Así, la segunda A es A₂ y se distingue de las demás."],
+      ["Cortar una cadena del donador", `Desde una posición al azar y con largo al azar, entre ⅓ y ½ del cromosoma, para que ambos padres aporten parecido. Aquí: <strong>${cadStr}</strong>.`],
+      ["Marcar en el receptor", "Se marcan en el receptor los mismos genes de la cadena, con el mismo índice (en azul)."],
+      c === 0 ? ["Implantar la cadena", `La cadena está dentro del donador, así que se implanta justo después del gen del receptor igual al primero de la cadena (<strong>${LET[cadena[0][0]]}${sub(cadena[0][1])}</strong>).`]
+              : ["Implantar la cadena", "La cadena da la vuelta al final del donador, así que se implanta en la misma posición que tiene en él: un pedazo al inicio y otro al final."],
+      ["Borrar los marcados", `Hijo: <strong>${r.hijo.map(g => LET[g]).join(" ")}</strong>. Cada trabajo conserva sus turnos y es exactamente el resultado del artículo.`],
+    ];
+    $("#gox-stepn").textContent = `Paso ${step} de 4`;
+    $("#gox-title").textContent = T[step][0];
+    $("#gox-text").innerHTML = T[step][1];
+    $("#gox-prev").disabled = step === 0; $("#gox-prev").style.opacity = step === 0 ? .35 : 1;
+    $("#gox-next").textContent = step === 4 ? "↺ Empezar de nuevo" : "Siguiente paso →";
+  }
+  $("#gox-next").onclick = () => { step = step === 4 ? 0 : step + 1; render(); };
+  $("#gox-prev").onclick = () => { if (step) step--; render(); };
+  $$("[data-gox-case]").forEach(b => b.onclick = () => {
+    c = +b.dataset.goxCase; step = 0;
+    $$("[data-gox-case]").forEach(x => x.classList.toggle("on", x === b));
+    render();
+  });
+  render();
+})();
+
+// ---------- Mutación ----------
+(() => {
+  const LET = "ABC";
+  let crom = [1, 0, 1, 1, 2, 0, 2, 2, 1, 0];
+  const box = $("#mut-genes");
+  const nodes = new Map();
+  let ids = crom.map((_, i) => i);
+  function render(hiId = -1) {
+    const before = new Map([...nodes].map(([id, n]) => [id, n.getBoundingClientRect()]));
+    const cnt = [0, 0, 0];
+    ids.forEach((id, p) => {
+      const g = crom[p];
+      let n = nodes.get(id);
+      if (!n) { n = geneEl(g, 0, LET); nodes.set(id, n); }
+      n.innerHTML = LET[g] + `<sub>${sub(++cnt[g])}</sub>`;
+      n.classList.toggle("cur", id === hiId);
+      box.appendChild(n);
+    });
+    for (const [id, n] of nodes) {
+      const a = before.get(id); if (!a) continue;
+      const b = n.getBoundingClientRect(), dx = (a.left - b.left) / scale, dy = (a.top - b.top) / scale;
+      if (dx || dy) n.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "translate(0,0)" }], { duration: 650, easing: "cubic-bezier(.3,.7,.2,1)" });
+    }
+  }
+  $("#mut-btn").onclick = () => {
+    const de = Math.floor(Math.random() * 10);
+    let a = Math.floor(Math.random() * 9); if (a >= de) a++;
+    const id = ids[de], g = crom[de];
+    render(id);
+    setTimeout(() => {
+      const [gg] = crom.splice(de, 1); crom.splice(a, 0, gg);
+      const [ii] = ids.splice(de, 1); ids.splice(a, 0, ii);
+      render(id);
+      $("#mut-text").textContent = `Una ${LET[g]} pasó de la posición ${de + 1} a la ${a + 1}. Siguen siendo 3 A, 4 B y 3 C.`;
+    }, 450);
+  };
+  render();
+})();
+
+// ---------- Ciclo (resalta los pasos en orden) ----------
+(() => {
+  let t = null, k = 0;
+  const steps = $$("#cycle .step");
+  hooks["s11"] = {
+    enter: () => { k = 0; t = setInterval(() => { steps.forEach((s, i) => s.classList.toggle("on", i === k % 4)); k++; }, 1300); },
+    leave: () => { clearInterval(t); steps.forEach(s => s.classList.remove("on")); },
+  };
+})();
+
+// ---------- Demos en vivo ----------
+function LiveGA(slide, cfg) {
+  const R = r => $(`[data-role=${r}]`, slide);
+  const gantt = Gantt(R("gantt"), cfg.gantt);
+  const chart = cfg.chart ? LineChart(R("chart"), { ref: cfg.chart.ref, legend: true }) : null;
+  const speeds = [["normal", 60, 1], ["lenta", 200, 1], ["rápida", 16, 4]];
+  let sp = 0, e = null, timer = null, xmax = 0;
+  function reset() {
+    pause();
+    const seed = Math.max(1, +R("seed").value || 1);
+    e = GA.crear(cfg.maq, cfg.tie, seed, cfg.pop);
+    xmax = Math.ceil((e.histMejor[0] + cfg.pad) / cfg.gantt.tickStep) * cfg.gantt.tickStep;
+    gantt.clear();
+    draw();
+    R("run").textContent = "▶ Evolucionar";
+  }
+  function draw() {
+    const best = e.histMejor.at(-1);
+    const h = GA.decodificar(GA.mejorDe(e), cfg.maq, cfg.tie).horario;
+    gantt.draw(h, cfg.refs(best), xmax);
+    R("gen").textContent = e.gen;
+    R("best").textContent = cfg.fmtBest(best);
+    R("gap").textContent = cfg.gapText(best);
+    if (R("avg")) R("avg").textContent = e.histProm.at(-1).toFixed(1);
+    if (R("ops")) R("ops").textContent = `${e.cruces.toLocaleString("es-MX")} · ${e.mutaciones.toLocaleString("es-MX")}`;
+    if (R("badge")) R("badge").innerHTML = cfg.badge ? cfg.badge(best) : "";
+    if (chart) chart.draw([{ name: "Mejor", data: e.histMejor, color: "#a58bff", w: 2.6, step: true }, { name: "Promedio", data: e.histProm, color: "#6f6a8c", w: 1.6 }],
+      cfg.chart.ymin, Math.ceil((e.histProm[0] + 20) / 50) * 50, cfg.gens);
+  }
+  function tick() {
+    for (let i = 0; i < speeds[sp][2] && e.gen < cfg.gens; i++) GA.generacion(e);
+    draw();
+    if (e.gen >= cfg.gens) { pause(); R("run").textContent = "▶ Nueva semilla"; }
+  }
+  function run() {
+    if (e.gen >= cfg.gens) { R("seed").value = (+R("seed").value || 0) + 1; reset(); }
+    timer = setInterval(tick, speeds[sp][1]);
+    R("run").textContent = "❚❚ Pausa";
+  }
+  function pause() { clearInterval(timer); timer = null; if (e && e.gen < cfg.gens) R("run").textContent = e.gen ? "▶ Continuar" : "▶ Evolucionar"; }
+  R("run").onclick = () => (timer ? pause() : run());
+  R("reset").onclick = reset;
+  R("seed").onchange = reset;
+  R("speed").onclick = () => {
+    sp = (sp + 1) % speeds.length;
+    R("speed").textContent = "Velocidad: " + speeds[sp][0];
+    if (timer) { pause(); run(); }
+  };
+  reset();
+  return { pause };
+}
+
+(() => {
+  const live = LiveGA($("[data-live=ft10]"), {
+    maq: FT.maq, tie: FT.tie, pop: 100, gens: 100, pad: 40,
+    gantt: { rows: FT.maq.map((_, q) => "M" + (q + 1)), xmax: 1300, tickStep: 100, left: 46, font: 11, minLabel: 18,
+      tip: h => `Trabajo ${h.j + 1}, tarea ${h.k + 1} en M${h.maq + 1}<br>${h.ini} → ${h.fin}` },
+    chart: { ref: { y: 930, label: "óptimo 930" }, ymin: 900 },
+    refs: best => [{ x: 930, label: "930", color: "#7ef2c4", dash: "2 4", anchor: "end" }, { x: best, label: "termina en " + best, color: "#ff6b6b", dash: "6 4" }],
+    fmtBest: b => b,
+    gapText: b => `+${((b - 930) / 930 * 100).toFixed(2)} % sobre el óptimo`,
+  });
+  hooks[$("[data-live=ft10]").dataset.key] = { leave: live.pause };
+})();
+
+(() => {
+  const pc = $("#patients");
+  HOSP.pacientes.forEach((n, j) => {
+    const d = document.createElement("div");
+    d.className = "patient";
+    d.innerHTML = `<div class="av" style="background:${COLORS[j]}">P${j + 1}</div><div><b>${n}</b><small>${HOSP.rutas[j].map(([q, t]) => HOSP.corto[q]).join(" → ")}</small></div>`;
+    pc.appendChild(d);
+  });
+  const slide = $("[data-live=hospital]");
+  const live = LiveGA(slide, {
+    maq: HOSP.maq, tie: HOSP.tie, pop: 50, gens: 60, pad: 15,
+    gantt: { rows: HOSP.areas, xmax: 210, tickStep: 15, left: 150, font: 12, minLabel: 16, fmt: reloj, label: h => "P" + (h.j + 1),
+      tip: h => `P${h.j + 1} · ${HOSP.pacientes[h.j]}<br>${HOSP.areas[h.maq]} · ${reloj(h.ini)} a ${reloj(h.fin)}` },
+    refs: best => best === 155
+      ? [{ x: 155, label: "óptimo: sale el último a las 10:35", color: "#7ef2c4", dash: "6 4", anchor: "end" }]
+      : [{ x: 155, label: "límite 10:35", color: "#7ef2c4", dash: "2 4", anchor: "end" },
+         { x: best, label: "sale el último: " + reloj(best), color: "#ff6b6b", dash: "6 4" }],
+    fmtBest: reloj,
+    gapText: b => `${b} min · ${200 - b} min antes que en orden de llegada`,
+    badge: b => b === 155 ? `<span class="badge">Óptimo: la consulta trabaja 155 min sin parar</span>` : "",
+  });
+  hooks[slide.dataset.key] = { leave: live.pause };
+})();
+
+// ---------- Resultados ----------
+(() => {
+  // Histograma de las 100 corridas
+  const svg = $("#hist"), W = 680, H = 296, L = 44, T = 16, B = 34, R = 12;
+  const x0 = 925, x1 = 1025, X = x => L + (x - x0) / (x1 - x0) * (W - L - R);
+  const bins = [];
+  for (let b = 945; b < 1025; b += 5) bins.push({ a: b, n: MS100.filter(m => m >= b && m < b + 5).length });
+  const ymax = Math.ceil(Math.max(...bins.map(b => b.n)) / 5) * 5, Y = y => T + (1 - y / ymax) * (H - T - B);
+  const gA = svgEl("g", { class: "axis" }, svg);
+  for (let y = 0; y <= ymax; y += 5) { svgEl("line", { x1: L, x2: W - R, y1: Y(y), y2: Y(y) }, gA); svgEl("text", { x: L - 10, y: Y(y) + 4, "text-anchor": "end" }, gA).textContent = y; }
+  for (let x = 940; x <= 1020; x += 20) svgEl("text", { x: X(x), y: H - 10, "text-anchor": "middle" }, gA).textContent = x;
+  for (const b of bins) {
+    const r = svgEl("rect", { x: X(b.a) + 1.5, y: Y(b.n), width: X(b.a + 5) - X(b.a) - 3, height: Y(0) - Y(b.n), rx: 4, fill: "url(#hg)" }, svg);
+    r.addEventListener("mousemove", ev => showTip(ev, `${b.a} – ${b.a + 4}: <b>${b.n}</b> corrida${b.n === 1 ? "" : "s"}`));
+    r.addEventListener("mouseleave", hideTip);
+  }
+  const defs = svgEl("defs", {}, svg), lg = svgEl("linearGradient", { id: "hg", x1: 0, y1: 0, x2: 0, y2: 1 }, defs);
+  svgEl("stop", { offset: 0, "stop-color": "#a58bff" }, lg); svgEl("stop", { offset: 1, "stop-color": "#5b3fd9", "stop-opacity": .5 }, lg);
+  for (const [x, lab, c, dy] of [[930, "óptimo 930", "#7ef2c4", 14], [936, "Bierwirth 936", "#a7a2c3", 34]]) {
+    svgEl("line", { x1: X(x), x2: X(x), y1: T, y2: H - B, stroke: c, "stroke-dasharray": "4 4", "stroke-width": 1.5 }, svg);
+    svgEl("text", { x: X(x) + 8, y: T + dy, fill: c, "font-size": 13 }, svg).textContent = lab;
+  }
+  // Convergencia de la semilla 79
+  LineChart($("#conv79"), { ref: { y: 930, label: "óptimo 930" }, legend: true, hover: true })
+    .draw([{ name: "Mejor", data: S79.hm, color: "#a58bff", w: 2.6, step: true }, { name: "Promedio", data: S79.hp, color: "#6f6a8c", w: 1.6, dec: 1 }], 900, 1300, 100);
+})();
+
+(() => {
+  const g = Gantt($("#ba-gantt"), { rows: FT.maq.map((_, q) => "M" + (q + 1)), xmax: 1250, tickStep: 100, left: 46, font: 12, minLabel: 18,
+    tip: h => `Trabajo ${h.j + 1}, tarea ${h.k + 1}<br>${h.ini} → ${h.fin}` });
+  const sched = [GA.decodificar(S79.ini, FT.maq, FT.tie), GA.decodificar(S79.c, FT.maq, FT.tie)];
+  let t = null;
+  function show(i) {
+    const s = sched[i];
+    g.draw(s.horario, [{ x: 930, label: "óptimo 930", color: "#7ef2c4", dash: "2 4", anchor: "end" }, { x: s.makespan, label: "termina en " + s.makespan, color: "#ff6b6b", dash: "6 4" }]);
+    $$("[data-ba]").forEach(b => b.classList.toggle("on", +b.dataset.ba === i));
+  }
+  $$("[data-ba]").forEach(b => b.onclick = () => { clearTimeout(t); show(+b.dataset.ba); });
+  show(0);
+  const key = $("#ba-gantt").closest(".slide").dataset.key;
+  hooks[key] = { enter: () => { show(0); t = setTimeout(() => show(1), 1600); }, leave: () => clearTimeout(t) };
+})();
+
+// ---------- Arranque ----------
+const inicio = parseInt(location.hash.slice(1), 10);
+slides[0].classList.remove("active");
+cur = 0;
+go(Number.isFinite(inicio) ? inicio - 1 : 0);
+if (!slides[cur].classList.contains("active")) { slides[cur].classList.add("active"); }
+
+</script>
+</body>
+</html>

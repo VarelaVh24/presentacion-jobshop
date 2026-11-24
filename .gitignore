@@ -1,0 +1,5 @@
+# Ignora todo salvo la presentación publicada
+*
+!.gitignore
+!presentacion-jobshop.html
+!index.html
